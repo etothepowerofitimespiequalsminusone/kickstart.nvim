@@ -461,6 +461,63 @@ require('lazy').setup({
           --  For example, in C this would take you to the header.
           map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
 
+          -- Copy fully-qualified reference (like PhpStorm's Copy Reference).
+          -- PHP:  \App\Exceptions\Handler::$dontFlash
+          -- TS/JS: ClassName.symbol
+          map('<leader>yr', function()
+            local ft = vim.bo[event.buf].filetype
+            local lines = vim.api.nvim_buf_get_lines(event.buf, 0, -1, false)
+            local symbol = vim.fn.expand '<cword>'
+            local ref
+
+            if ft == 'php' then
+              local namespace, classname = '', ''
+              for _, line in ipairs(lines) do
+                namespace = line:match '^namespace%s+([%w\\]+)' or namespace
+                classname = line:match '^%s*class%s+(%w+)'
+                  or line:match '^%s*abstract%s+class%s+(%w+)'
+                  or line:match '^%s*final%s+class%s+(%w+)'
+                  or line:match '^%s*interface%s+(%w+)'
+                  or line:match '^%s*trait%s+(%w+)'
+                  or line:match '^%s*enum%s+(%w+)'
+                  or classname
+              end
+              ref = '\\' .. namespace .. '\\' .. classname .. '::' .. symbol
+            elseif ft == 'typescript' or ft == 'javascript' or ft == 'typescriptreact' or ft == 'javascriptreact' then
+              local classname = ''
+              for _, line in ipairs(lines) do
+                classname = line:match '^%s*class%s+(%w+)'
+                  or line:match '^%s*export%s+class%s+(%w+)'
+                  or line:match '^%s*export%s+default%s+class%s+(%w+)'
+                  or line:match '^%s*abstract%s+class%s+(%w+)'
+                  or line:match '^%s*export%s+abstract%s+class%s+(%w+)'
+                  or classname
+              end
+              ref = classname ~= '' and (classname .. '.' .. symbol) or symbol
+            else
+              ref = symbol
+            end
+
+            vim.fn.setreg('+', ref)
+            vim.notify('Copied: ' .. ref, vim.log.levels.INFO)
+          end, '[Y]ank [R]eference')
+
+          -- Copy relative file path  e.g. app/Exceptions/Handler.php
+          map('<leader>yf', function()
+            local rel = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(event.buf), ':.')
+            vim.fn.setreg('+', rel)
+            vim.notify('Copied: ' .. rel, vim.log.levels.INFO)
+          end, '[Y]ank [F]ile path')
+
+          -- Copy relative file path + line  e.g. app/Exceptions/Handler.php:42
+          map('<leader>yl', function()
+            local rel = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(event.buf), ':.')
+            local line = vim.api.nvim_win_get_cursor(0)[1]
+            local ref = rel .. ':' .. line
+            vim.fn.setreg('+', ref)
+            vim.notify('Copied: ' .. ref, vim.log.levels.INFO)
+          end, '[Y]ank file path + [L]ine')
+
           -- The following two autocommands are used to highlight references of the
           -- word under your cursor when your cursor rests there for a little while.
           --    See `:help CursorHold` for information about when this is executed
@@ -691,6 +748,7 @@ require('lazy').setup({
           --  This will auto-import if your LSP supports it.
           --  This will expand snippets if the LSP sent a snippet.
           ['<C-y>'] = cmp.mapping.confirm { select = true },
+          ['<Tab>'] = cmp.mapping.confirm { select = true },
 
           -- If you prefer more traditional completion keymaps,
           -- you can uncomment the following lines
